@@ -41,10 +41,15 @@ Every image is pinned to Switch 0.31.0, so a redeploy never pulls a surprise upg
 
 **First login (about 3 minutes after deploy)**
 
-1. Wait until `switch` and `mattermost` are green and `setup` shows Completed.
-2. Open the `switch` service's Variables tab and copy `GATEWAY_ADMIN_PASSWORD`.
-3. Open the `switch` service's public URL and sign in with your email and that password. This is the admin dashboard.
-4. Your Mattermost login is user `owner` with the password in the `setup` service's `MATTERMOST_USER_PASSWORD` variable, at the `mattermost` service's URL. The Mattermost system admin is `admin` with `MATTERMOST_ADMIN_PASSWORD`.
+Wait until `switch` and `mattermost` are green and `setup` shows Completed. Your logins, with each password in that service's Variables tab:
+
+| Sign in to | URL | User | Password variable |
+|---|---|---|---|
+| Switch dashboard | `switch` service URL | your email | `switch` → `GATEWAY_ADMIN_PASSWORD` |
+| Mattermost (chat here) | `mattermost` service URL | your email or `owner` | `setup` → `MATTERMOST_USER_PASSWORD` |
+| Mattermost system admin | `mattermost` service URL | `admin` | `setup` → `MATTERMOST_ADMIN_PASSWORD` |
+
+**Chat as `owner`, never as `admin`.** Switch connects to Mattermost as the `admin` account and ignores that account's own posts, so agents never see anything you write as `admin`. Use `admin` only to create accounts and invite links (open signup is off because the URL is public).
 
 **Connect Switch Console (each teammate)**
 
@@ -65,6 +70,16 @@ Add the app's variables to the `switch` service and redeploy. Callbacks go to th
 
 Each app's setup is in the [messaging apps guide](https://docs.switchagents.ai/flintai/switch/deploy/messaging-apps). You can remove the `mattermost` and `setup` services afterwards if you do not want the bundled chat.
 
+**After the first deploy: change things in the apps, not in variables**
+
+Most variables are first-boot seeds. Once Switch and Mattermost have created your accounts, they keep their own copy in the database, so editing a variable afterwards does not change the real login.
+
+- Change your dashboard password or email in the Switch dashboard. Editing `GATEWAY_ADMIN_PASSWORD` does nothing, and editing `GATEWAY_ADMIN_EMAIL` creates a second admin account.
+- Change Mattermost passwords in Mattermost. Leave the `admin` password alone: Switch stored it when it connected, so changing it in Mattermost disconnects Switch until you update the Mattermost connector in the dashboard.
+- Safe to edit and redeploy: `DB_PASSWORD`, `AGENT_REGISTRATION_TOKEN`, `FEATURE_FLAGS_ENABLED`, and the Slack, Teams, Discord and Telegram variables.
+- Never change `POSTGRES_PASSWORD` (Postgres keeps the original in its volume) or `ID_SERVER_NAME`. Rotate `SECRET_KEYS` by putting a new key first, `k2:<new>,k1:<old>`, never by replacing it.
+- `setup` variables are labelled "First deploy only". Editing one reruns `setup`, which only creates what is missing (a different `MATTERMOST_USER` or `MATTERMOST_TEAM_NAME` adds a second user or team; the existing connection keeps the old one). You can delete the `setup` service once it shows Completed.
+
 **Back these up**
 
 - The `postgres` volume holds everything: rooms, messages, files, accounts.
@@ -81,6 +96,8 @@ Each app's setup is in the [messaging apps guide](https://docs.switchagents.ai/f
 
 - `mattermost` may restart once on the first deploy if it starts before `switch` has created its database. That is expected.
 - `setup` shows a single `502 ... Invalid or expired session` line while the Mattermost connection warms up, then continues. Only worry if it ends in Failed after 10 retries; redeploying `setup` is safe, it is idempotent.
+- `setup` fails with `404 Not Found` on `/api/v4/teams/name/...`: `MATTERMOST_TEAM_NAME` must be lowercase letters, numbers and hyphens. Set it back to `switch`.
+- You posted in Mattermost and no agent answered: check you are signed in as `owner`, not `admin` (see above), and that the agent is a member of that room.
 - Sign-in loops back to the login page: open the dashboard on its `https://` URL. Session cookies are Secure.
 
 **Scaling and upgrades**

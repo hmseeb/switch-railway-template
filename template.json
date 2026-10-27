@@ -270,63 +270,69 @@
         "image": "ghcr.io/sandbox-quantum/setup:0.31.0"
       },
       "deploy": {
-        "$note": "One-shot seeder, idempotent: Mattermost admin, team and owner account, registers the bridge, links the owner. Exits 0 when done.",
+        "$note": "One-shot seeder, idempotent: Mattermost admin, team and owner account, registers the bridge, links the owner. Exits 0 when done. Reruns (any variable edit redeploys it) go through setup_boot.py, because upstream's seeder crashes on Mattermost's closed-signup 403 when the admin already exists (found 2026-10-27, test/setup_boot.sh).",
+        "startCommand": "/bin/sh -c \"printenv SETUP_BOOT > /tmp/boot.py && exec python -u /tmp/boot.py\"",
         "restartPolicyType": "ON_FAILURE",
         "restartPolicyMaxRetries": 10
       },
       "variables": {
+        "SETUP_BOOT": {
+          "$note": "Replaced with the contents of setup_boot.py by upsert.py and build_source.py.",
+          "defaultValue": "@setup_boot.py",
+          "description": "Rerun shim for the seeder. Do not edit."
+        },
         "SWITCH_URL": {
           "$note": "Public https on purpose: the gateway cookie is Secure, so a login over private http keeps no session.",
           "defaultValue": "https://${{switch.RAILWAY_PUBLIC_DOMAIN}}",
-          "description": "Switch URL the seeder signs in to."
+          "description": "First deploy only. Switch URL the seeder signs in to."
         },
         "MATTERMOST_URL": {
           "defaultValue": "http://${{mattermost.RAILWAY_PRIVATE_DOMAIN}}:8065",
-          "description": "Mattermost URL the seeder uses."
+          "description": "First deploy only. Mattermost URL the seeder uses."
         },
         "MATTERMOST_URL_FOR_SWITCH": {
           "defaultValue": "http://${{mattermost.RAILWAY_PRIVATE_DOMAIN}}:8065",
-          "description": "Mattermost URL switch connects to."
+          "description": "First deploy only. Mattermost URL switch connects to."
         },
         "MATTERMOST_PUBLIC_URL": {
           "defaultValue": "https://${{mattermost.RAILWAY_PUBLIC_DOMAIN}}",
-          "description": "Mattermost URL people open."
+          "description": "First deploy only. Mattermost URL people open."
         },
         "MATTERMOST_CALLBACK_BASE_URL": {
           "defaultValue": "http://${{switch.RAILWAY_PRIVATE_DOMAIN}}:8081",
-          "description": "Where Mattermost delivers button presses."
+          "description": "First deploy only. Where Mattermost delivers button presses."
         },
         "MATTERMOST_ADMIN_USER": {
           "defaultValue": "admin",
-          "description": "Mattermost system admin username."
+          "description": "First deploy only. Mattermost system admin username."
         },
         "MATTERMOST_ADMIN_PASSWORD": {
           "defaultValue": "${{secret(24)}}",
-          "description": "Mattermost system admin password."
+          "description": "First deploy only. Mattermost system admin password."
         },
         "MATTERMOST_TEAM_NAME": {
           "defaultValue": "switch",
-          "description": "Mattermost team the bridge uses."
+          "description": "First deploy only. Mattermost team the bridge uses (lowercase letters, numbers, hyphens)."
         },
         "MATTERMOST_USER": {
           "defaultValue": "owner",
-          "description": "Your Mattermost username, linked to the dashboard admin."
+          "description": "First deploy only. Your Mattermost username, linked to the dashboard admin."
         },
         "MATTERMOST_USER_EMAIL": {
           "defaultValue": "${{switch.GATEWAY_ADMIN_EMAIL}}",
-          "description": "Email of your Mattermost account."
+          "description": "First deploy only. Email of your Mattermost account."
         },
         "MATTERMOST_USER_PASSWORD": {
           "defaultValue": "${{secret(24)}}",
-          "description": "Password of your Mattermost account."
+          "description": "First deploy only. Password of your Mattermost account."
         },
         "GATEWAY_ADMIN_EMAIL": {
           "defaultValue": "${{switch.GATEWAY_ADMIN_EMAIL}}",
-          "description": "Dashboard admin email."
+          "description": "First deploy only. Dashboard admin email."
         },
         "GATEWAY_ADMIN_PASSWORD": {
           "defaultValue": "${{switch.GATEWAY_ADMIN_PASSWORD}}",
-          "description": "Dashboard admin password."
+          "description": "First deploy only. Dashboard admin password."
         }
       }
     }

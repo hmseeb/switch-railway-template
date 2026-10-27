@@ -2,7 +2,8 @@
 """End-to-end message path on a deployed project, no LLM needed:
 dashboard login -> register an agent -> agent creates a Mattermost room and adds the
 owner -> owner posts in Mattermost -> agent receives it on its SSE stream -> agent
-replies -> the reply is read back from Mattermost. Credentials come from the
+replies -> the reply is read back from Mattermost -> the setup seeder is redeployed
+and must complete again. Credentials come from the
 project's Railway variables and are never printed.
 
 Usage: journey.py <projectId>
@@ -143,3 +144,15 @@ assert reply, "reply never reached Mattermost"
 author = mm.get(f"/api/v4/users/{reply['user_id']}").json()
 print("reply in Mattermost from", author.get("username"), "is_bot", author.get("is_bot"))
 print("JOURNEY PASS")
+
+step("rerun setup: a redeploy of the seeder must complete again")
+dep = rw.gql("mutation($s:String!,$e:String!){serviceInstanceDeployV2(serviceId:$s,environmentId:$e)}",
+             {"s": svc["setup"], "e": env})["serviceInstanceDeployV2"]
+for _ in range(40):
+    time.sleep(15)
+    logs = [x["message"] for x in rw.gql("query($d:String!){deploymentLogs(deploymentId:$d,limit:60){message}}", {"d": dep})["deploymentLogs"]]
+    if any("Setup complete" in x or "Traceback" in x for x in logs):
+        break
+assert any("Setup complete" in x for x in logs) and not any("Traceback" in x for x in logs), "\n".join(logs[-15:])
+print("setup rerun completed")
+print("RERUN PASS")
