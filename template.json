@@ -1,0 +1,334 @@
+{
+  "$note": "Build sheet for Agent Switch (sandbox-quantum/switch, Apache-2.0 + modified Commons Clause, server images 0.31.0, repo commit 94c721a of 2026-10-27). Topology is upstream's standalone compose (deploy/local/standalone-docker-compose.yml) with profiles collab on: postgres + switch-core + mattermost + the setup seeder. Dropped: the nginx `gateway` service (switch-core 0.31 serves the dashboard itself, GATEWAY_UI_DIR is baked into the image) and the tuwuneldata volume (only legacy upgrades read it). init-db has no Railway equivalent, so boot.py (embedded as SWITCH_BOOT, contract-tested by test/boot.sh) creates the databases and the unprivileged runtime role, then makes the listener dual-stack. Policy gate: CLEAR; traffic only reaches messaging workspaces the deployer connects. Commons Clause forbids selling hosting of it: staff ruling 2026-08-08 says template it, an owner takedown unpublishes without a strike. upsert.py strips every $note key and mints fresh UUIDs.",
+  "name": "Agent Switch",
+  "services": {
+    "postgres": {
+      "icon": "https://cdn.simpleicons.org/postgresql",
+      "source": {
+        "$note": "Railway's own Postgres image. 16 to match upstream compose (Railway's template default is 18).",
+        "image": "ghcr.io/railwayapp-templates/postgres-ssl:16"
+      },
+      "deploy": {
+        "restartPolicyType": "ALWAYS"
+      },
+      "volumeMounts": {
+        "mountPath": "/var/lib/postgresql/data"
+      },
+      "variables": {
+        "PGDATA": {
+          "$note": "Subdirectory: Railway volumes ship a lost+found that initdb refuses.",
+          "defaultValue": "/var/lib/postgresql/data/pgdata",
+          "description": "Data directory inside the volume."
+        },
+        "POSTGRES_USER": {
+          "defaultValue": "postgres",
+          "description": "Superuser. Switch runs migrations as it (DB_OWNER_USER), never requests."
+        },
+        "POSTGRES_PASSWORD": {
+          "defaultValue": "${{secret(32, \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\")}}",
+          "description": "Superuser password."
+        },
+        "POSTGRES_DB": {
+          "defaultValue": "switch",
+          "description": "Switch's database. The mattermost one is created by switch at boot."
+        },
+        "SSL_CERT_DAYS": {
+          "defaultValue": "820",
+          "description": "Lifetime of the self-signed certificate."
+        },
+        "RAILWAY_DEPLOYMENT_DRAINING_SECONDS": {
+          "defaultValue": "60",
+          "description": "Time Postgres gets to shut down cleanly."
+        }
+      }
+    },
+    "switch": {
+      "icon": "https://cdn.prod.website-files.com/6a26f9dd113918ff685f6913/6ac805606fcbcbc3e2ac7d8a_switch-webclip.png",
+      "source": {
+        "image": "ghcr.io/sandbox-quantum/switch-core:0.31.0"
+      },
+      "deploy": {
+        "$note": "Start commands are exec'd raw, so a shell writes the shim out of its variable and execs it. No quotes inside on purpose: Railway's argv parser strips backslash escapes.",
+        "startCommand": "/bin/sh -c \"printenv SWITCH_BOOT > /tmp/boot.py && exec python /tmp/boot.py\"",
+        "healthcheckPath": "/health/ready",
+        "restartPolicyType": "ALWAYS"
+      },
+      "networking": {
+        "port": 8000
+      },
+      "variables": {
+        "SWITCH_BOOT": {
+          "$note": "Replaced with the contents of boot.py by upsert.py and build_source.py.",
+          "defaultValue": "@boot.py",
+          "description": "Boot shim: creates the database role, then starts Switch. Do not edit."
+        },
+        "PORT": {
+          "defaultValue": "8000",
+          "description": "Port the API and dashboard listen on."
+        },
+        "SERVER_HOST": {
+          "defaultValue": "::",
+          "description": "IPv6 any; the boot shim makes it serve IPv4 too."
+        },
+        "SERVER_PORT": {
+          "defaultValue": "8000",
+          "description": "Switch API and dashboard port."
+        },
+        "COLLABORATION_CALLBACK_HOST": {
+          "$note": "Port 8081 receives Mattermost button presses over the private network, which is IPv6.",
+          "defaultValue": "::",
+          "description": "Listener for chat app button callbacks (private network only)."
+        },
+        "DB_HOST": {
+          "defaultValue": "${{postgres.RAILWAY_PRIVATE_DOMAIN}}",
+          "description": "Postgres host."
+        },
+        "DB_PORT": {
+          "defaultValue": "5432",
+          "description": "Postgres port."
+        },
+        "DB_NAME": {
+          "defaultValue": "${{postgres.POSTGRES_DB}}",
+          "description": "Switch database."
+        },
+        "DB_OWNER_USER": {
+          "defaultValue": "${{postgres.POSTGRES_USER}}",
+          "description": "Schema owner, used only for migrations and grants."
+        },
+        "DB_OWNER_PASSWORD": {
+          "defaultValue": "${{postgres.POSTGRES_PASSWORD}}",
+          "description": "Schema owner password."
+        },
+        "DB_USER": {
+          "$note": "Must not be the owner: switch-core refuses to start if requests would bypass row-level security.",
+          "defaultValue": "switch_app",
+          "description": "Unprivileged runtime role every request runs as."
+        },
+        "DB_PASSWORD": {
+          "defaultValue": "${{secret(48, \"abcdef0123456789\")}}",
+          "description": "Runtime role password."
+        },
+        "ID_SERVER_NAME": {
+          "$note": "Upstream compose uses localhost. It is a naming scheme, never contacted, and changing it later orphans every account and room.",
+          "defaultValue": "switch.local",
+          "description": "Suffix of every account and room id. Cannot be changed after first boot."
+        },
+        "SECRET_KEYS": {
+          "$note": "Format <id>:<secret>, current key first. Signs sessions and encrypts stored API keys.",
+          "defaultValue": "k1:${{secret(64, \"abcdef0123456789\")}}",
+          "description": "Master key. Keep a copy: losing it makes stored agent API keys unreadable."
+        },
+        "AGENT_REGISTRATION_TOKEN": {
+          "defaultValue": "${{secret(48, \"abcdef0123456789\")}}",
+          "description": "Admin registration key agents register against."
+        },
+        "GATEWAY_ADMIN_EMAIL": {
+          "description": "Email you sign in to the Switch dashboard with."
+        },
+        "GATEWAY_ADMIN_PASSWORD": {
+          "defaultValue": "${{secret(24)}}",
+          "description": "Dashboard password for the admin email. Read it here after deploy."
+        },
+        "GATEWAY_COOKIE_SECURE": {
+          "defaultValue": "true",
+          "description": "Railway serves https, so session cookies are Secure."
+        },
+        "FRONTEND_BASE_URL": {
+          "defaultValue": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
+          "description": "Dashboard URL."
+        },
+        "GATEWAY_PUBLIC_URL": {
+          "$note": "Also the --server the dashboard's Add machine dialog prints for agent controllers.",
+          "defaultValue": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
+          "description": "Public API URL (Switch Console server URL)."
+        },
+        "MESSAGING_PUBLIC_URL": {
+          "defaultValue": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
+          "description": "URL Slack, Teams, Discord and Telegram call back to."
+        },
+        "OUTBOUND_ALLOWED_PRIVATE_HOSTS": {
+          "$note": "Switch refuses private addresses unless listed; the bundled Mattermost lives on one.",
+          "defaultValue": "${{mattermost.RAILWAY_PRIVATE_DOMAIN}}",
+          "description": "Private hosts Switch may call."
+        },
+        "FEATURE_FLAGS_ENABLED": {
+          "$note": "The set Switch Console turns on for a new server it runs (console/.../managed-switch-server/env-file.ts). agent_management is what lets agent controllers enroll from the dashboard.",
+          "defaultValue": "agent_management,agent_chats,switch_buddy,follow_the_conversation,service_connections",
+          "description": "Enabled Switch features."
+        },
+        "CONTROLLER_TOKEN_SECRET": {
+          "defaultValue": "${{secret(64, \"abcdef0123456789\")}}",
+          "description": "Signs the tokens agent controllers use."
+        }
+      }
+    },
+    "mattermost": {
+      "icon": "https://cdn.simpleicons.org/mattermost",
+      "source": {
+        "$note": "Pinned like upstream: Switch Console embeds this Mattermost's web UI and depends on its DOM.",
+        "image": "mattermost/mattermost-team-edition:11.9.0"
+      },
+      "deploy": {
+        "$note": "Restarts until switch's boot has created the mattermost database.",
+        "healthcheckPath": "/api/v4/system/ping",
+        "restartPolicyType": "ALWAYS"
+      },
+      "networking": {
+        "port": 8065
+      },
+      "volumeMounts": {
+        "mountPath": "/mattermost/data"
+      },
+      "variables": {
+        "RAILWAY_RUN_UID": {
+          "$note": "The image runs as uid 2000; Railway volumes are root-owned.",
+          "defaultValue": "0",
+          "description": "Run as root so Mattermost can write its volume."
+        },
+        "PORT": {
+          "defaultValue": "8065",
+          "description": "Mattermost port."
+        },
+        "MM_SQLSETTINGS_DRIVERNAME": {
+          "defaultValue": "postgres",
+          "description": "Database driver."
+        },
+        "MM_SQLSETTINGS_DATASOURCE": {
+          "defaultValue": "postgres://${{postgres.POSTGRES_USER}}:${{postgres.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/mattermost?sslmode=disable",
+          "description": "Mattermost database (created by switch at boot)."
+        },
+        "MM_SERVICESETTINGS_SITEURL": {
+          "defaultValue": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
+          "description": "Public Mattermost URL."
+        },
+        "MM_SERVICESETTINGS_ENABLELOCALMODE": {
+          "defaultValue": "true",
+          "description": "From upstream compose."
+        },
+        "MM_SERVICESETTINGS_ENABLEONBOARDINGFLOW": {
+          "defaultValue": "false",
+          "description": "The onboarding modal blocks the room view embedded in Switch Console."
+        },
+        "MM_DISPLAYSETTINGS_CUSTOMURLSCHEMES": {
+          "defaultValue": "switchdash",
+          "description": "Makes agents' switchdash:// session links clickable."
+        },
+        "MM_SERVICESETTINGS_ENABLEBOTACCOUNTCREATION": {
+          "defaultValue": "true",
+          "description": "Agents post as bot accounts."
+        },
+        "MM_SERVICESETTINGS_ENABLEUSERACCESSTOKENS": {
+          "defaultValue": "true",
+          "description": "The Switch bridge authenticates with access tokens."
+        },
+        "MM_SERVICESETTINGS_ALLOWEDUNTRUSTEDINTERNALCONNECTIONS": {
+          "defaultValue": "${{switch.RAILWAY_PRIVATE_DOMAIN}}",
+          "description": "Lets message buttons call switch over the private network."
+        },
+        "MM_TEAMSETTINGS_ENABLEOPENSERVER": {
+          "$note": "Upstream has true, which is fine on localhost. On a public URL it is an open signup chat server, so off; the seeder creates accounts with the admin session.",
+          "defaultValue": "false",
+          "description": "Off: only the admin creates accounts or sends invite links."
+        },
+        "MM_TEAMSETTINGS_TEAMMATENAMEDISPLAY": {
+          "defaultValue": "full_name",
+          "description": "From upstream compose."
+        },
+        "MM_LOGSETTINGS_ENABLEDIAGNOSTICS": {
+          "defaultValue": "false",
+          "description": "No Mattermost telemetry."
+        },
+        "MM_LOGSETTINGS_ENABLESENTRY": {
+          "defaultValue": "false",
+          "description": "No crash reporting to Mattermost."
+        },
+        "MM_SERVICESETTINGS_ENABLESECURITYFIXALERT": {
+          "defaultValue": "false",
+          "description": "From upstream compose."
+        },
+        "MM_ANNOUNCEMENTSETTINGS_ADMINNOTICESENABLED": {
+          "defaultValue": "false",
+          "description": "From upstream compose."
+        },
+        "MM_ANNOUNCEMENTSETTINGS_USERNOTICESENABLED": {
+          "defaultValue": "false",
+          "description": "From upstream compose."
+        },
+        "MM_PLUGINSETTINGS_ENABLEREMOTEMARKETPLACE": {
+          "defaultValue": "false",
+          "description": "From upstream compose."
+        },
+        "MM_PLUGINSETTINGS_PLUGINSTATES": {
+          "defaultValue": "{\"mattermost-ai\":{\"Enable\":false},\"com.mattermost.calls\":{\"Enable\":false}}",
+          "description": "Copilot and Calls cannot work in this stack, so both are off."
+        }
+      }
+    },
+    "setup": {
+      "icon": "https://cdn.prod.website-files.com/6a26f9dd113918ff685f6913/6ac805606fcbcbc3e2ac7d8a_switch-webclip.png",
+      "source": {
+        "image": "ghcr.io/sandbox-quantum/setup:0.31.0"
+      },
+      "deploy": {
+        "$note": "One-shot seeder, idempotent: Mattermost admin, team and owner account, registers the bridge, links the owner. Exits 0 when done.",
+        "restartPolicyType": "ON_FAILURE",
+        "restartPolicyMaxRetries": 10
+      },
+      "variables": {
+        "SWITCH_URL": {
+          "$note": "Public https on purpose: the gateway cookie is Secure, so a login over private http keeps no session.",
+          "defaultValue": "https://${{switch.RAILWAY_PUBLIC_DOMAIN}}",
+          "description": "Switch URL the seeder signs in to."
+        },
+        "MATTERMOST_URL": {
+          "defaultValue": "http://${{mattermost.RAILWAY_PRIVATE_DOMAIN}}:8065",
+          "description": "Mattermost URL the seeder uses."
+        },
+        "MATTERMOST_URL_FOR_SWITCH": {
+          "defaultValue": "http://${{mattermost.RAILWAY_PRIVATE_DOMAIN}}:8065",
+          "description": "Mattermost URL switch connects to."
+        },
+        "MATTERMOST_PUBLIC_URL": {
+          "defaultValue": "https://${{mattermost.RAILWAY_PUBLIC_DOMAIN}}",
+          "description": "Mattermost URL people open."
+        },
+        "MATTERMOST_CALLBACK_BASE_URL": {
+          "defaultValue": "http://${{switch.RAILWAY_PRIVATE_DOMAIN}}:8081",
+          "description": "Where Mattermost delivers button presses."
+        },
+        "MATTERMOST_ADMIN_USER": {
+          "defaultValue": "admin",
+          "description": "Mattermost system admin username."
+        },
+        "MATTERMOST_ADMIN_PASSWORD": {
+          "defaultValue": "${{secret(24)}}",
+          "description": "Mattermost system admin password."
+        },
+        "MATTERMOST_TEAM_NAME": {
+          "defaultValue": "switch",
+          "description": "Mattermost team the bridge uses."
+        },
+        "MATTERMOST_USER": {
+          "defaultValue": "owner",
+          "description": "Your Mattermost username, linked to the dashboard admin."
+        },
+        "MATTERMOST_USER_EMAIL": {
+          "defaultValue": "${{switch.GATEWAY_ADMIN_EMAIL}}",
+          "description": "Email of your Mattermost account."
+        },
+        "MATTERMOST_USER_PASSWORD": {
+          "defaultValue": "${{secret(24)}}",
+          "description": "Password of your Mattermost account."
+        },
+        "GATEWAY_ADMIN_EMAIL": {
+          "defaultValue": "${{switch.GATEWAY_ADMIN_EMAIL}}",
+          "description": "Dashboard admin email."
+        },
+        "GATEWAY_ADMIN_PASSWORD": {
+          "defaultValue": "${{switch.GATEWAY_ADMIN_PASSWORD}}",
+          "description": "Dashboard admin password."
+        }
+      }
+    }
+  }
+}

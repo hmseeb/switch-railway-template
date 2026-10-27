@@ -1,0 +1,14 @@
+{
+  "projectId": "6dce0297-aaa7-43f6-bc5a-f423ea8c9101",
+  "environmentId": "5289bd61-dda6-4cee-93fe-aa6266ac5e13",
+  "services": {
+    "postgres": "6593f73d-51cb-403e-895d-32538e7d5b89",
+    "switch": "b42dac26-9c02-46e4-8069-3d50b4acca9d",
+    "mattermost": "3ac916c9-bb19-4aae-b37f-b4d7136cc704",
+    "setup": "ead9d432-d915-4a16-9b9c-eaea5cfe2cf4"
+  },
+  "domains": {
+    "switch": "https://switch-production-0612.up.railway.app",
+    "mattermost": "https://mattermost-production-4b95.up.railway.app"
+  }
+}
