@@ -80,6 +80,9 @@ with sync_playwright() as p:
         pg = ctx.new_page(); pg.on("crash", lambda *_: print("PAGE CRASH")); pg.on("close", lambda *_: print("PAGE CLOSED")); br.on("disconnected", lambda *_: print("BROWSER GONE")); pg.goto(f"{URL}/{os.environ.get('TEAM', 'calls')}/messages/@{peer}"); pg.wait_for_timeout(4000)
         try: pg.get_by_text("View in Browser").click(timeout=15000)
         except Exception: pass
+        for dismiss in ("No thanks, I’ll figure it out myself", "No thanks, I'll figure it out myself"):
+            try: pg.get_by_text(dismiss).click(timeout=4000); break
+            except Exception: pass
         pg.get_by_role("button", name="Start call").or_(pg.get_by_role("button", name="Join call")).first.wait_for(timeout=30000)
         pages.append(pg)
     a, b = pages
@@ -89,14 +92,16 @@ with sync_playwright() as p:
     if not btn.count(): btn = a.locator("#calls-join-button, button:has-text('Start call'), button[aria-label*='call' i]")
     print("start buttons:", btn.count()); btn.first.click(); a.wait_for_timeout(6000)
     a.screenshot(path="/tmp/calls_a_started.png")
-    b.reload(); b.wait_for_timeout(6000)
-    try: b.get_by_text("View in Browser").click(timeout=10000)
-    except Exception: pass
-    b.wait_for_timeout(5000)
-    jb = b.get_by_role("button", name="Join call")
-    if not jb.count(): jb = b.locator("button:has-text('Join call'), #calls-join-button")
+    # B answers the ringing call where it rings (Calls 1.12 rings DMs; a reload can miss the ring).
+    for _ in range(20):
+        jb = b.get_by_role("button", name="Join", exact=True).or_(b.get_by_role("button", name="Join call"))
+        if jb.count() and jb.first.is_enabled():
+            break
+        b.wait_for_timeout(1500)
     print("join buttons:", jb.count()); jb.first.click(); b.wait_for_timeout(15000)
     b.screenshot(path="/tmp/calls_b_joined.png")
+    a.wait_for_timeout(10000); a.screenshot(path="/tmp/calls_a_end.png"); b.screenshot(path="/tmp/calls_b_end.png")
+    print("A client:", a.evaluate("() => { const c = window.callsClient; return c ? Object.keys(c).filter(k => /peer|pc|rtc/i.test(k)) : null }"))
     sa, sb = a.evaluate(STATS), b.evaluate(STATS)
     print("A:", json.dumps(sa)); print("B:", json.dumps(sb))
     ok = all(any(x["state"] == "connected" and x["in"] > 0 and x["out"] > 0 for x in s) for s in (sa, sb))
