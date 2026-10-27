@@ -4,14 +4,13 @@ Agent Switch puts AI coding agents (Claude Code, Codex, OpenCode, Cursor, Gemini
 
 ## About Hosting Agent Switch
 
-This template runs a Switch team server: the one address everyone's Switch Console and agent machines connect to. It deploys four services:
+This template runs a Switch team server: the one address everyone's Switch Console and agent machines connect to. It deploys five services:
 
 - **switch**: the Switch server (API, agent event streams, MCP server and the admin dashboard on one URL)
 - **postgres**: rooms, messages, files and accounts
 - **mattermost**: a bundled chat app, already connected, so there is a working room on day one without a Slack admin
 - **setup**: a one-shot job that creates your Mattermost accounts and team, connects Mattermost to Switch, and links your accounts. It shows Completed when done.
-
-Agents do not run on Railway. They run on each person's own computer (or a build box) through Switch Console or the headless agent controller, using that person's own model subscription or API key. Railway hosts only the shared server, so it stays small.
+- **agents**: a machine that runs your agents on Railway, around the clock, with Claude Code, Codex and OpenCode installed. It enrolls itself with Switch as the machine `railway`, and you sign it in to your own Claude or ChatGPT subscription from a web page. No terminal on the server, no laptop that has to stay awake.
 
 Every image is pinned to Switch 0.31.0, so a redeploy never pulls a surprise upgrade.
 
@@ -25,6 +24,7 @@ Every image is pinned to Switch 0.31.0, so a redeploy never pulls a surprise upg
 ## Dependencies for Agent Switch Hosting
 
 - PostgreSQL 16 on a Railway volume
+- The agent runner image (Switch agent controller 0.31.0, Claude Code, Codex, OpenCode), built from the template repository
 - Mattermost Team Edition 11.9 on a Railway volume
 - Switch server images from GitHub Container Registry
 
@@ -34,6 +34,7 @@ Every image is pinned to Switch 0.31.0, so a redeploy never pulls a surprise upg
 - [Switch documentation](https://docs.switchagents.ai)
 - [Self-hosting guide](https://docs.switchagents.ai/flintai/switch/deploy/self-host)
 - [Switch Console download](https://docs.switchagents.ai/flintai/switch/getting-started/install-switch-console)
+- [Template source, agent runner image and tests](https://github.com/hmseeb/switch-railway-template)
 
 ### Implementation Details
 
@@ -55,7 +56,15 @@ Wait until `switch` and `mattermost` are green and `setup` shows Completed. Your
 
 Install Switch Console, choose **Add a server**, then **Connect to an existing server**, and enter the `switch` public URL as both the Gateway URL and the API URL. Teammates need a dashboard account (invite them from the dashboard) and a Mattermost account (create it as the Mattermost admin, or connect Slack instead).
 
-**Run agents on a machine that stays up**
+**Run agents on Railway (the `agents` service)**
+
+1. Open the `agents` service's public URL and sign in with your Switch dashboard email and password.
+2. Claude subscription: on your own computer run `claude setup-token` once, paste the `sk-ant-oat…` token, and save. Codex: click **Sign in with ChatGPT**, open the link, and enter the code shown. Either takes effect within seconds.
+3. In Switch Console, create an agent, choose the provider you signed in, and pick **railway** as its machine. Invite it to a room and mention it.
+
+Prefer pay-per-use API keys? Add `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to the `agents` service's variables instead. Agents work in folders on the `agents` volume; give them a GitHub connection in Switch to clone and push. Delete the `agents` service if everyone runs agents on their own computers.
+
+**Run agents on your own machines too**
 
 The dashboard's **Machines** page has an **Add machine** button that prints a one-line install command with a 10-minute enrollment code. Run it on any Linux or macOS box that has the agent CLIs you want (Claude Code, Codex, OpenCode) and it runs your agents as a service. Agent management is already switched on in this template.
 
@@ -97,6 +106,8 @@ Most variables are first-boot seeds. Once Switch and Mattermost have created you
 - `mattermost` may restart once on the first deploy if it starts before `switch` has created its database. That is expected.
 - `setup` shows a single `502 ... Invalid or expired session` line while the Mattermost connection warms up, then continues. Only worry if it ends in Failed after 10 retries; redeploying `setup` is safe, it is idempotent.
 - `setup` fails with `404 Not Found` on `/api/v4/teams/name/...`: `MATTERMOST_TEAM_NAME` must be lowercase letters, numbers and hyphens. Set it back to `switch`.
+- An agent on `railway` says it could not start a session: open the `agents` URL and check the provider shows Connected. A token that Anthropic revoked needs a fresh `claude setup-token`.
+- `agents` logs `enrollment not done yet: dashboard sign-in refused`: it signs in once with `GATEWAY_ADMIN_EMAIL` and `GATEWAY_ADMIN_PASSWORD` to enroll. If you changed the dashboard password before it enrolled, set the new one on the `agents` service.
 - You posted in Mattermost and no agent answered: check you are signed in as `owner`, not `admin` (see above), and that the agent is a member of that room.
 - Sign-in loops back to the login page: open the dashboard on its `https://` URL. Session cookies are Secure.
 
