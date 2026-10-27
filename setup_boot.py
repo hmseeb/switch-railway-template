@@ -6,11 +6,18 @@ on every rerun Mattermost refuses with 403 `no_open_server` instead and the
 seeder crashes. Rewrite exactly that refusal to 409; a wrong admin password
 still fails loudly at the login that follows.
 
+MATTERMOST_TEAM_NAME becomes the team's URL name, which Mattermost only accepts as
+lowercase letters, digits and hyphens. Deployers type "Acme Inc" in the deploy
+form, the team is refused, and the whole bridge setup dies with it (found
+2026-10-27). So the name is turned into a valid slug before upstream reads it,
+and what was typed is kept as the team's display name.
+
 After seeding, it switches Mattermost Calls on for everyone (the plugin's
 DefaultEnabled has no env variable), once: an admin who turns it off later keeps
 it off. Config lives in Postgres (MM_CONFIG), so it survives redeploys.
 """
 import os
+import re
 import runpy
 
 import httpx
@@ -28,6 +35,23 @@ def _post_tolerating_closed_signup(self, url, *args, **kwargs):
 
 
 httpx.Client.post = _post_tolerating_closed_signup
+
+TEAM_TYPED = os.environ.get("MATTERMOST_TEAM_NAME", "")
+TEAM_SLUG = re.sub(r"[^a-z0-9]+", "-", TEAM_TYPED.lower()).strip("-")[:64] or "team"
+if len(TEAM_SLUG) < 2:
+    TEAM_SLUG = "team"
+if TEAM_SLUG != TEAM_TYPED:
+    print(f"setup-boot: team name {TEAM_TYPED!r} becomes {TEAM_SLUG!r} in URLs", flush=True)
+    os.environ["MATTERMOST_TEAM_NAME"] = TEAM_SLUG
+    _post_closed = httpx.Client.post
+
+    def _post_with_typed_team_name(self, url, *args, **kwargs):
+        body = kwargs.get("json")
+        if str(url).endswith("/api/v4/teams") and isinstance(body, dict) and body.get("name") == TEAM_SLUG:
+            kwargs["json"] = {**body, "display_name": TEAM_TYPED.strip() or TEAM_SLUG}
+        return _post_closed(self, url, *args, **kwargs)
+
+    httpx.Client.post = _post_with_typed_team_name
 
 
 

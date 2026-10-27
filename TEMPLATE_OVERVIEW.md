@@ -113,7 +113,6 @@ Most variables are first-boot seeds. Once Switch and Mattermost have created you
 
 - `mattermost` may restart once on the first deploy if it starts before `switch` has created its database. That is expected.
 - `setup` shows a single `502 ... Invalid or expired session` line while the Mattermost connection warms up, then continues. Only worry if it ends in Failed after 10 retries; redeploying `setup` is safe, it is idempotent.
-- `setup` fails with `404 Not Found` on `/api/v4/teams/name/...`: `MATTERMOST_TEAM_NAME` must be lowercase letters, numbers and hyphens. Set it back to `switch`.
 - An agent on `railway` says it could not start a session: open the `agents` URL and check the provider shows Connected. A token that Anthropic revoked needs a fresh `claude setup-token`.
 - `agents` logs `enrollment not done yet: dashboard sign-in refused`: it signs in once with `GATEWAY_ADMIN_EMAIL` and `GATEWAY_ADMIN_PASSWORD` to enroll. If you changed the dashboard password before it enrolled, set the new one on the `agents` service.
 - A call never connects (spins on Connecting): your network probably blocks UDP. See Voice calls above for the TURN setting. No Start call button in a channel: Team Edition only allows calls in 1:1 direct messages.

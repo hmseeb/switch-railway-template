@@ -318,7 +318,7 @@
         },
         "MATTERMOST_TEAM_NAME": {
           "defaultValue": "switch",
-          "description": "First deploy only. Mattermost team the bridge uses (lowercase letters, numbers, hyphens)."
+          "description": "First deploy only. Your team name, as you want it shown (any capitals or spaces; URLs use a lowercase version)."
         },
         "MATTERMOST_USER": {
           "defaultValue": "owner",
