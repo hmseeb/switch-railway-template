@@ -1,0 +1,24 @@
+name: agents image
+on:
+  push:
+    branches: [main]
+    paths: ["image/**", ".github/workflows/agents-image.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - id: tag
+        run: echo "tag=$(cat image/VERSION)" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: image
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/hmseeb/switch-railway-agents:${{ steps.tag.outputs.tag }}

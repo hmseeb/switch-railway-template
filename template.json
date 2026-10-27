@@ -335,6 +335,47 @@
           "description": "First deploy only. Dashboard admin password."
         }
       }
+    },
+    "agents": {
+      "icon": "https://cdn.prod.website-files.com/6a26f9dd113918ff685f6913/6ac805606fcbcbc3e2ac7d8a_switch-webclip.png",
+      "source": {
+        "$note": "Built from image/ in this repo by .github/workflows/agents-image.yml (public repo, so GHCR pulls anonymously). Upstream publishes no controller image. Tag = controller version + template revision.",
+        "image": "ghcr.io/hmseeb/switch-railway-agents:0.31.0-r1"
+      },
+      "deploy": {
+        "$note": "boot.mjs supervises the controller itself (upstream's exit-code rules), so the container only exits on SIGTERM.",
+        "healthcheckPath": "/health",
+        "restartPolicyType": "ALWAYS"
+      },
+      "networking": {
+        "port": 8080
+      },
+      "volumeMounts": {
+        "$note": "HOME and the controller identity live here: provider logins, agent workspaces, session state. The entrypoint chowns it to the node user.",
+        "mountPath": "/data"
+      },
+      "variables": {
+        "SWITCH_URL": {
+          "defaultValue": "https://${{switch.RAILWAY_PUBLIC_DOMAIN}}",
+          "description": "Switch server this machine enrolls with (must be https)."
+        },
+        "GATEWAY_ADMIN_EMAIL": {
+          "defaultValue": "${{switch.GATEWAY_ADMIN_EMAIL}}",
+          "description": "First boot only. Dashboard admin used once to mint this machine's enrollment code."
+        },
+        "GATEWAY_ADMIN_PASSWORD": {
+          "defaultValue": "${{switch.GATEWAY_ADMIN_PASSWORD}}",
+          "description": "First boot only. Password for the above."
+        },
+        "MACHINE_NAME": {
+          "defaultValue": "railway",
+          "description": "First boot only. Name this machine gets in Switch (pick it as an agent's run location)."
+        },
+        "PORT": {
+          "defaultValue": "8080",
+          "description": "Connect page port."
+        }
+      }
     }
   }
 }
