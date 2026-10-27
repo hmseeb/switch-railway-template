@@ -197,6 +197,11 @@
           "defaultValue": "postgres://${{postgres.POSTGRES_USER}}:${{postgres.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/mattermost?sslmode=disable",
           "description": "Mattermost database (created by switch at boot)."
         },
+        "MM_CONFIG": {
+          "$note": "Without this the config is /mattermost/config/config.json, outside the volume, so every System Console change was lost on redeploy. Verified the Calls settings survive a redeploy.",
+          "defaultValue": "${{MM_SQLSETTINGS_DATASOURCE}}",
+          "description": "Keep Mattermost's settings in Postgres so System Console changes survive redeploys."
+        },
         "MM_SERVICESETTINGS_SITEURL": {
           "defaultValue": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
           "description": "Public Mattermost URL."
@@ -259,8 +264,9 @@
           "description": "From upstream compose."
         },
         "MM_PLUGINSETTINGS_PLUGINSTATES": {
-          "defaultValue": "{\"mattermost-ai\":{\"Enable\":false},\"com.mattermost.calls\":{\"Enable\":false}}",
-          "description": "Copilot and Calls cannot work in this stack, so both are off."
+          "$note": "Upstream disables Calls. Verified 2026-10-27 on Railway: 1:1 DM calls connect over UDP (Calls finds Railway's egress IP via STUN, NAT hole punching works), including a non-admin starter. A TCP fallback through a Railway TCP proxy cannot line up (rtcd advertises the listening port, the proxy's public port is random), so UDP-blocked networks need TURN via MM_CALLS_ICE_SERVERS_CONFIGS. Group calls need a Mattermost Professional license.",
+          "defaultValue": "{\"mattermost-ai\":{\"Enable\":false},\"com.mattermost.calls\":{\"Enable\":true}}",
+          "description": "Copilot off (no provider configured); Calls on (1:1 direct message calls)."
         }
       }
     },

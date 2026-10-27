@@ -21,6 +21,7 @@ Deployer guide and listing copy: [TEMPLATE_OVERVIEW.md](TEMPLATE_OVERVIEW.md).
 | `test/boot.sh` | Local contract test for `boot.py` against the pinned image (Docker). |
 | `test/setup_boot.sh` | Contract test for `setup_boot.py` in the pinned setup image (Docker). |
 | `test/agent_run.py` | Real agent turn: creates a managed Claude agent on a machine and asserts its Mattermost answer. Needs the machine signed in to Claude. |
+| `test/calls.py` | Mattermost Calls: two headless browsers hold a 1:1 call and must exchange audio (usage in its header). |
 | `test/journey.py` | End-to-end check on a deployed project: dashboard login, enrollment code, agent registration, Mattermost round trip, then a `setup` rerun. |
 
 ## Upgrading

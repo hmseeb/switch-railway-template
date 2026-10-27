@@ -68,6 +68,14 @@ Prefer pay-per-use API keys? Add `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to the 
 
 The dashboard's **Machines** page has an **Add machine** button that prints a one-line install command with a 10-minute enrollment code. Run it on any Linux or macOS box that has the agent CLIs you want (Claude Code, Codex, OpenCode) and it runs your agents as a service. Agent management is already switched on in this template.
 
+**Voice calls in Mattermost**
+
+Calls are on for everyone: open a direct message and click **Start call**. They connect over UDP straight to Railway, with no extra setup.
+
+- Mattermost Team Edition allows calls in 1:1 direct messages only. Calls in channels and group messages need a Mattermost Professional license.
+- A network that blocks outgoing UDP (some offices and VPNs) needs a TURN relay. Add `MM_CALLS_ICE_SERVERS_CONFIGS` to the `mattermost` service with your TURN provider's details, for example `[{"urls":["turn:turn.example.com:443?transport=tcp"],"username":"...","credential":"..."}]`, and redeploy.
+- To turn calls off, disable the Calls plugin in the System Console.
+
 **Connect Slack, Teams, Discord or Telegram (optional, any time)**
 
 Add the app's variables to the `switch` service and redeploy. Callbacks go to the `switch` public URL, which this template already sets as `MESSAGING_PUBLIC_URL`.
@@ -84,7 +92,7 @@ Each app's setup is in the [messaging apps guide](https://docs.switchagents.ai/f
 Most variables are first-boot seeds. Once Switch and Mattermost have created your accounts, they keep their own copy in the database, so editing a variable afterwards does not change the real login.
 
 - Change your dashboard password or email in the Switch dashboard. Editing `GATEWAY_ADMIN_PASSWORD` does nothing, and editing `GATEWAY_ADMIN_EMAIL` creates a second admin account.
-- Change Mattermost passwords in Mattermost. Leave the `admin` password alone: Switch stored it when it connected, so changing it in Mattermost disconnects Switch until you update the Mattermost connector in the dashboard.
+- Mattermost's own settings live in its database, so System Console changes survive redeploys. Change Mattermost passwords in Mattermost. Leave the `admin` password alone: Switch stored it when it connected, so changing it in Mattermost disconnects Switch until you update the Mattermost connector in the dashboard.
 - Safe to edit and redeploy: `DB_PASSWORD`, `AGENT_REGISTRATION_TOKEN`, `FEATURE_FLAGS_ENABLED`, and the Slack, Teams, Discord and Telegram variables.
 - Never change `POSTGRES_PASSWORD` (Postgres keeps the original in its volume) or `ID_SERVER_NAME`. Rotate `SECRET_KEYS` by putting a new key first, `k2:<new>,k1:<old>`, never by replacing it.
 - `setup` variables are labelled "First deploy only". Editing one reruns `setup`, which only creates what is missing (a different `MATTERMOST_USER` or `MATTERMOST_TEAM_NAME` adds a second user or team; the existing connection keeps the old one). You can delete the `setup` service once it shows Completed.
@@ -108,6 +116,7 @@ Most variables are first-boot seeds. Once Switch and Mattermost have created you
 - `setup` fails with `404 Not Found` on `/api/v4/teams/name/...`: `MATTERMOST_TEAM_NAME` must be lowercase letters, numbers and hyphens. Set it back to `switch`.
 - An agent on `railway` says it could not start a session: open the `agents` URL and check the provider shows Connected. A token that Anthropic revoked needs a fresh `claude setup-token`.
 - `agents` logs `enrollment not done yet: dashboard sign-in refused`: it signs in once with `GATEWAY_ADMIN_EMAIL` and `GATEWAY_ADMIN_PASSWORD` to enroll. If you changed the dashboard password before it enrolled, set the new one on the `agents` service.
+- A call never connects (spins on Connecting): your network probably blocks UDP. See Voice calls above for the TURN setting. No Start call button in a channel: Team Edition only allows calls in 1:1 direct messages.
 - You posted in Mattermost and no agent answered: check you are signed in as `owner`, not `admin` (see above), and that the agent is a member of that room.
 - Sign-in loops back to the login page: open the dashboard on its `https://` URL. Session cookies are Secure.
 
