@@ -14,7 +14,7 @@ and what was typed is kept as the team's display name.
 
 After seeding, it switches Mattermost Calls on for everyone (the plugin's
 DefaultEnabled has no env variable), once: an admin who turns it off later keeps
-it off. Config lives in Postgres (MM_CONFIG), so it survives redeploys.
+it off. Config lives on Mattermost's volume (MM_CONFIG), so it survives redeploys.
 """
 import os
 import re

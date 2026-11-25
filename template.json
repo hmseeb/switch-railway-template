@@ -29,8 +29,9 @@
           "description": "Superuser password."
         },
         "POSTGRES_DB": {
-          "defaultValue": "switch",
-          "description": "Switch's database. The mattermost one is created by switch at boot."
+          "$note": "Mattermost's database, created by initdb before Postgres accepts connections, so mattermost never waits on switch's boot (it used to, and crashed whenever it started first: test/mattermost_race.sh). switch's boot creates its own DB_NAME.",
+          "defaultValue": "mattermost",
+          "description": "Mattermost's database, created with the cluster. Switch's database is created by switch at boot."
         },
         "SSL_CERT_DAYS": {
           "defaultValue": "820",
@@ -88,8 +89,8 @@
           "description": "Postgres port."
         },
         "DB_NAME": {
-          "defaultValue": "${{postgres.POSTGRES_DB}}",
-          "description": "Switch database."
+          "defaultValue": "switch",
+          "description": "Switch database, created at boot."
         },
         "DB_OWNER_USER": {
           "defaultValue": "${{postgres.POSTGRES_USER}}",
@@ -195,12 +196,12 @@
         },
         "MM_SQLSETTINGS_DATASOURCE": {
           "defaultValue": "postgres://${{postgres.POSTGRES_USER}}:${{postgres.POSTGRES_PASSWORD}}@${{postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/mattermost?sslmode=disable",
-          "description": "Mattermost database (created by switch at boot)."
+          "description": "Mattermost database (postgres creates it with the cluster)."
         },
         "MM_CONFIG": {
-          "$note": "Without this the config is /mattermost/config/config.json, outside the volume, so every System Console change was lost on redeploy. Verified the Calls settings survive a redeploy.",
-          "defaultValue": "${{MM_SQLSETTINGS_DATASOURCE}}",
-          "description": "Keep Mattermost's settings in Postgres so System Console changes survive redeploys."
+          "$note": "Without this the config is /mattermost/config/config.json, outside the volume, so every System Console change was lost on redeploy. A file on the volume, not the database: a database config store exits on the first failed connection, so mattermost crashed whenever it started before postgres (each crash costs template health). The file store lets the SQL store retry its connection. test/mattermost_race.sh checks both.",
+          "defaultValue": "/mattermost/data/config.json",
+          "description": "Mattermost settings file, on the volume so System Console changes survive redeploys."
         },
         "MM_SERVICESETTINGS_SITEURL": {
           "defaultValue": "https://${{RAILWAY_PUBLIC_DOMAIN}}",
