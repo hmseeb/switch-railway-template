@@ -4,8 +4,8 @@
 # 403 is left alone.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VERSION=${SWITCH_VERSION:-$(python3 -c 'import json;print(json.load(open("template.json"))["services"]["setup"]["source"]["image"].split(":")[-1])')}
-docker run --rm -e MATTERMOST_TEAM_NAME="BadAaas Inc." -v "$PWD/setup_boot.py:/shim/setup_boot.py:ro" "ghcr.io/sandbox-quantum/setup:$VERSION" python -c '
+IMAGE=${SETUP_IMAGE:-$(python3 -c 'import json;print(json.load(open("template.json"))["services"]["setup"]["source"]["image"])')}
+docker run --rm -e MATTERMOST_TEAM_NAME="BadAaas Inc." -v "$PWD/setup_boot.py:/shim/setup_boot.py:ro" "$IMAGE" python -c '
 import http.server, json, os, sys, threading
 class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self):

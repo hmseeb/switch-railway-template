@@ -1,5 +1,5 @@
 {
-  "$note": "Build sheet for Agent Switch (sandbox-quantum/switch, Apache-2.0 + modified Commons Clause, server images 0.31.0, repo commit 94c721a of 2026-10-27). Topology is upstream's standalone compose (deploy/local/standalone-docker-compose.yml) with profiles collab on: postgres + switch-core + mattermost + the setup seeder. Dropped: the nginx `gateway` service (switch-core 0.31 serves the dashboard itself, GATEWAY_UI_DIR is baked into the image) and the tuwuneldata volume (only legacy upgrades read it). init-db has no Railway equivalent, so boot.py (embedded as SWITCH_BOOT, contract-tested by test/boot.sh) creates the databases and the unprivileged runtime role, then makes the listener dual-stack. Policy gate: CLEAR; traffic only reaches messaging workspaces the deployer connects. Commons Clause forbids selling hosting of it: staff ruling 2026-08-08 says template it, an owner takedown unpublishes without a strike. upsert.py strips every $note key and mints fresh UUIDs.",
+  "$note": "Build sheet for Agent Switch (sandbox-quantum/switch, Apache-2.0 + modified Commons Clause, server images 0.32.2, tag switch-v0.32.2 = cc881de of 2026-11-25). Topology was upstream's standalone compose with profiles collab on (postgres + switch-core + mattermost + the setup seeder). Upstream 0.32.0 removed the bundled Mattermost and the setup job from compose and Helm (commit f6cc8cc) but kept the Mattermost bridge, and still runs Mattermost plus the same seeder in its e2e stack (deploy/local/docker-compose.e2e-mattermost.yml); this template keeps that shape. Migration e5b2c8d4f1a7 only retires a seeded bridge that already existed before the upgrade (status set to retiring); one registered on a fresh 0.32 database stays active. Dropped: the nginx `gateway` service (switch-core 0.31 serves the dashboard itself, GATEWAY_UI_DIR is baked into the image) and the tuwuneldata volume (only legacy upgrades read it). init-db has no Railway equivalent, so boot.py (embedded as SWITCH_BOOT, contract-tested by test/boot.sh) creates the databases and the unprivileged runtime role, then makes the listener dual-stack. Policy gate: CLEAR; traffic only reaches messaging workspaces the deployer connects. Commons Clause forbids selling hosting of it: staff ruling 2026-08-08 says template it, an owner takedown unpublishes without a strike. upsert.py strips every $note key and mints fresh UUIDs.",
   "name": "Agent Switch",
   "services": {
     "postgres": {
@@ -46,7 +46,7 @@
     "switch": {
       "icon": "https://cdn.prod.website-files.com/6a26f9dd113918ff685f6913/6ac805606fcbcbc3e2ac7d8a_switch-webclip.png",
       "source": {
-        "image": "ghcr.io/sandbox-quantum/switch-core:0.31.0"
+        "image": "ghcr.io/sandbox-quantum/switch-core:0.32.2"
       },
       "deploy": {
         "$note": "Start commands are exec'd raw, so a shell writes the shim out of its variable and execs it. No quotes inside on purpose: Railway's argv parser strips backslash escapes.",
@@ -153,7 +153,7 @@
           "description": "Private hosts Switch may call."
         },
         "FEATURE_FLAGS_ENABLED": {
-          "$note": "The set Switch Console turns on for a new server it runs (console/.../managed-switch-server/env-file.ts). agent_management is what lets agent controllers enroll from the dashboard.",
+          "$note": "The set Switch Console turns on for a new server it runs. Since 0.32 agent management and chats are always on and the names are still accepted; kept so the set reads the same as upstream's.",
           "defaultValue": "agent_management,agent_chats,switch_buddy,follow_the_conversation,service_connections",
           "description": "Enabled Switch features."
         },
@@ -166,8 +166,8 @@
     "mattermost": {
       "icon": "https://cdn.simpleicons.org/mattermost",
       "source": {
-        "$note": "Pinned like upstream: Switch Console embeds this Mattermost's web UI and depends on its DOM.",
-        "image": "mattermost/mattermost-team-edition:11.9.0"
+        "$note": "Upstream pinned 11.9.0 because Switch Console embedded this Mattermost's web UI. 0.32 removed that embed, and upstream's e2e Mattermost runs :latest, so this follows the current stable release, pinned.",
+        "image": "mattermost/mattermost-team-edition:12.1.0"
       },
       "deploy": {
         "$note": "Restarts until switch's boot has created the mattermost database.",
@@ -274,7 +274,8 @@
     "setup": {
       "icon": "https://cdn.prod.website-files.com/6a26f9dd113918ff685f6913/6ac805606fcbcbc3e2ac7d8a_switch-webclip.png",
       "source": {
-        "image": "ghcr.io/sandbox-quantum/setup:0.31.0"
+        "$note": "Built from setup-image/ in this repo (upstream's deploy/shared_resources/setup.py at switch-v0.32.2, checksum-pinned). Upstream stopped publishing ghcr.io/sandbox-quantum/setup after 0.32.0-rc.7. The 0.31 seeder no longer fits 0.32: identity links must be confirmed (CHOO-3881), and only the 0.32 seeder confirms the owner's link.",
+        "image": "ghcr.io/hmseeb/switch-railway-setup:0.32.2-r1"
       },
       "deploy": {
         "$note": "One-shot seeder, idempotent: Mattermost admin, team and owner account, registers the bridge, links the owner. Exits 0 when done. Reruns (any variable edit redeploys it) go through setup_boot.py, because upstream's seeder crashes on Mattermost's closed-signup 403 when the admin already exists (found 2026-10-27, test/setup_boot.sh).",
@@ -347,7 +348,7 @@
       "icon": "https://cdn.prod.website-files.com/6a26f9dd113918ff685f6913/6ac805606fcbcbc3e2ac7d8a_switch-webclip.png",
       "source": {
         "$note": "Built from image/ in this repo by .github/workflows/agents-image.yml (public repo, so GHCR pulls anonymously). Upstream publishes no controller image. Tag = controller version + template revision.",
-        "image": "ghcr.io/hmseeb/switch-railway-agents:0.31.0-r1"
+        "image": "ghcr.io/hmseeb/switch-railway-agents:0.32.2-r1"
       },
       "deploy": {
         "$note": "boot.mjs supervises the controller itself (upstream's exit-code rules), so the container only exits on SIGTERM.",

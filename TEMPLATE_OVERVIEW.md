@@ -12,7 +12,7 @@ This template runs a Switch team server: the one address everyone's Switch Conso
 - **setup**: a one-shot job that creates your Mattermost accounts and team, connects Mattermost to Switch, and links your accounts. It shows Completed when done.
 - **agents**: a machine that runs your agents on Railway, around the clock, with Claude Code, Codex and OpenCode installed. It enrolls itself with Switch as the machine `railway`, and you sign it in to your own Claude or ChatGPT subscription from a web page. No terminal on the server, no laptop that has to stay awake.
 
-Every image is pinned to Switch 0.31.0, so a redeploy never pulls a surprise upgrade.
+Every image is pinned to Switch 0.32.2, so a redeploy never pulls a surprise upgrade.
 
 ## Common Use Cases
 
@@ -24,8 +24,8 @@ Every image is pinned to Switch 0.31.0, so a redeploy never pulls a surprise upg
 ## Dependencies for Agent Switch Hosting
 
 - PostgreSQL 16 on a Railway volume
-- The agent runner image (Switch agent controller 0.31.0, Claude Code, Codex, OpenCode), built from the template repository
-- Mattermost Team Edition 11.9 on a Railway volume
+- The agent runner and setup images (Switch agent controller 0.32.2, Claude Code, Codex, OpenCode; Switch's own seeder), built from the template repository
+- Mattermost Team Edition 12.1 on a Railway volume
 - Switch server images from GitHub Container Registry
 
 ### Deployment Dependencies
@@ -92,7 +92,7 @@ Each app's setup is in the [messaging apps guide](https://docs.switchagents.ai/f
 Most variables are first-boot seeds. Once Switch and Mattermost have created your accounts, they keep their own copy in the database, so editing a variable afterwards does not change the real login.
 
 - Change your dashboard password or email in the Switch dashboard. Editing `GATEWAY_ADMIN_PASSWORD` does nothing, and editing `GATEWAY_ADMIN_EMAIL` creates a second admin account.
-- Mattermost's own settings live in its database, so System Console changes survive redeploys. Change Mattermost passwords in Mattermost. Leave the `admin` password alone: Switch stored it when it connected, so changing it in Mattermost disconnects Switch until you update the Mattermost connector in the dashboard.
+- Mattermost's own settings live on its volume, so System Console changes survive redeploys. Change Mattermost passwords in Mattermost. Leave the `admin` password alone: Switch stored it when it connected, so changing it in Mattermost disconnects Switch until you update the Mattermost connector in the dashboard.
 - Safe to edit and redeploy: `DB_PASSWORD`, `AGENT_REGISTRATION_TOKEN`, `FEATURE_FLAGS_ENABLED`, and the Slack, Teams, Discord and Telegram variables.
 - Never change `POSTGRES_PASSWORD` (Postgres keeps the original in its volume) or `ID_SERVER_NAME`. Rotate `SECRET_KEYS` by putting a new key first, `k2:<new>,k1:<old>`, never by replacing it.
 - `setup` variables are labelled "First deploy only". Editing one reruns `setup`, which only creates what is missing (a different `MATTERMOST_USER` or `MATTERMOST_TEAM_NAME` adds a second user or team; the existing connection keeps the old one). You can delete the `setup` service once it shows Completed.
@@ -121,7 +121,9 @@ Most variables are first-boot seeds. Once Switch and Mattermost have created you
 
 **Scaling and upgrades**
 
-The Switch server runs as a single replica by design. To upgrade, change the image tag on `switch` and `setup` to the same newer version and redeploy them; migrations run on boot. Keep Mattermost on the version Switch pins, because Switch Console embeds its web UI.
+The Switch server runs as a single replica by design. To upgrade within a release line, change the image tag on `switch` and `setup` to the same newer version and redeploy them; migrations run on boot.
+
+Upgrading a deployment made from the 0.31 template to Switch 0.32 by changing tags disconnects its bundled Mattermost: since 0.32 Switch no longer bundles Mattermost, and an upstream migration retires the Mattermost connection the old setup job made, moving its rooms into Switch Console chats. If you rely on the bundled Mattermost, stay on 0.31 or deploy this template fresh. Deployments made from this template on 0.32 or later are not affected.
 
 **License**
 

@@ -1,8 +1,8 @@
-name: agents image
+name: images
 on:
   push:
     branches: [main]
-    paths: ["image/**", ".github/workflows/agents-image.yml"]
+    paths: ["image/**", "setup-image/**", ".github/workflows/agents-image.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,15 +10,27 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { dir: image, name: switch-railway-agents }
+          - { dir: setup-image, name: switch-railway-setup }
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
         with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
       - id: tag
-        run: echo "tag=$(cat image/VERSION)" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@v6
+        run: echo "tag=$(cat ${{ matrix.dir }}/VERSION)" >> "$GITHUB_OUTPUT"
+      # Never move a tag deployers already run: a VERSION that is already published is skipped.
+      - id: exists
+        run: |
+          if docker manifest inspect ghcr.io/hmseeb/${{ matrix.name }}:${{ steps.tag.outputs.tag }} >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"; echo "tag already published, not rebuilding"
+          fi
+      - if: steps.exists.outputs.skip != 'true'
+        uses: docker/build-push-action@v6
         with:
-          context: image
+          context: ${{ matrix.dir }}
           platforms: linux/amd64
           push: true
-          tags: ghcr.io/hmseeb/switch-railway-agents:${{ steps.tag.outputs.tag }}
+          tags: ghcr.io/hmseeb/${{ matrix.name }}:${{ steps.tag.outputs.tag }}
