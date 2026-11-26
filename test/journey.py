@@ -16,6 +16,8 @@ import time
 import uuid
 
 import httpx
+from urllib.parse import urlencode
+from websockets.sync.client import connect as ws_connect
 
 sys.path.insert(0, str(pathlib.Path("~/.claude/skills/create-template-for-railway/scripts").expanduser()))
 import rw  # noqa: E402
@@ -72,42 +74,45 @@ assert {"create_room", "post_message"} <= set(ops), sorted(ops)
 step("agent creates a room with the owner in it")
 room = op("create_room", {"name": name, "description": "journey test room", "agent_names": [name],
                           "user_names": [setup["MATTERMOST_USER"]]})
-print("room:", json.dumps(room)[:300])
+print("room:", json.dumps(room)[:800])
 room_id = room.get("room_id") or room.get("id") or room["room"]["id"]
 
 step("agent opens its event stream")
+# 0.32 answers the old SSE stream 410 transport_removed: agents connect over a
+# WebSocket now, the way upstream's loadtest/agents.py does (protocol 9, every
+# `ping` answered with a `pong`; the server's pings are the heartbeat).
 conn = str(uuid.uuid4())
 seen, ready = [], threading.Event()
+WS = API.replace("https://", "wss://", 1).replace("http://", "ws://", 1)
 
 
 def stream():
-    with httpx.Client(base_url=API, timeout=None, headers={"Authorization": f"Bearer {key}", "Accept": "text/event-stream"}) as c:
-        with c.stream("GET", f"/agents/{agent_id}/events", params={"connection_id": conn, "scope": "single",
-                                                                   "rooms": room_id, "start_from": "head"}) as r:
-            if r.status_code != 200:
-                seen.append({"open_error": r.status_code, "body": r.read().decode()[:300]})
-                ready.set()
-                return
-            for line in r.iter_lines():
-                if line and not line.startswith("data:"):
-                    print("sse:", line[:120], flush=True)
-                if line.startswith("data:"):
-                    seen.append(json.loads(line[5:]))
+    params = {"connection_id": conn, "scope": "single", "filter": "all", "rooms": room_id, "start_from": "head",
+              "start_at": "head", "protocol": "9", "protocol_accepts": "1", "client": "template-journey", "client_version": "1"}
+    try:
+        with ws_connect(f"{WS}/agents/{agent_id}/connection/ws?{urlencode(params)}", open_timeout=30, max_size=None,
+                        additional_headers={"Authorization": f"Bearer {key}"}) as ws:
+            for raw in ws:
+                msg = json.loads(raw)
+                ev = msg.get("event")
+                if ev == "ping":
+                    ws.send(json.dumps({"type": "pong", "cursor": 0, "position": {}}))
+                    continue
+                print("ws:", ev, flush=True) if ev != "message" else None
+                if ev == "refused":
+                    seen.append({"open_error": msg.get("data")})
                     ready.set()
+                    return
+                seen.append(msg)
+                ready.set()
+    except Exception as e:  # noqa: BLE001
+        seen.append({"open_error": repr(e)})
+        ready.set()
 
 
 threading.Thread(target=stream, daemon=True).start()
 assert ready.wait(30), "no connection_state frame"
 assert "open_error" not in seen[0], seen[0]
-
-
-def beat():
-    while True:
-        ag.post(f"/agents/{agent_id}/connection/beat", json={"connection_id": conn})
-        time.sleep(2)
-
-
-threading.Thread(target=beat, daemon=True).start()
 print("first frame:", json.dumps(seen[0])[:160])
 
 step("owner posts in Mattermost")

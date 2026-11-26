@@ -47,12 +47,15 @@ agent = r.json()
 agent_id = agent.get("id") or agent.get("agent_id") or agent["agent"]["id"]
 print("agent", name, agent_id)
 
-step("room with the owner and the agent (created by a throwaway registered agent)")
-r = httpx.post(API + "/agents/register-known", timeout=30, headers={"Authorization": f"Bearer {sw['AGENT_REGISTRATION_TOKEN']}"},
-               json={"agent_type": "claude-code", "name": f"helper-{uuid.uuid4().hex[:5]}", "description": "room creator"})
-helper_id, key = r.json()["id"], r.json()["api_key"]
-r = httpx.post(f"{API}/agents/{helper_id}/ops/create_room", timeout=30, headers={"Authorization": f"Bearer {key}"},
-               json={"name": name, "description": "agent run test", "agent_names": [name], "user_names": [setup["MATTERMOST_USER"]]})
+step("owner creates a room with the agent, as Switch Console does")
+# Since 0.32 a registered agent may not invite an owner-only managed agent ("it doesn't
+# take requests from you"), so the owner makes the room: Console's POST /gateway/rooms.
+bridges = gw.get("/gateway/collaborations").json()
+bridges = bridges.get("bridges", bridges) if isinstance(bridges, dict) else bridges
+bridge = next(b for b in bridges if b.get("bridge_type") == "mattermost" and b.get("is_default"))
+r = gw.post("/gateway/rooms", json={"name": name, "description": "agent run test", "instructions": None,
+                                    "bridge_id": bridge["bridge_id"], "channel_type": "channel_public",
+                                    "agent_ids": [agent_id], "user_names": [setup["MATTERMOST_USER"]]})
 assert r.is_success, (r.status_code, r.text[:400])
 print("room", r.json().get("id"))
 
